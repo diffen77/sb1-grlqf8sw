@@ -1,0 +1,430 @@
+openapi: 3.1.0
+info:
+  title: Stryktipset Match Management API
+  version: 1.0.0
+  description: API for managing football matches and betting data
+  contact:
+    name: API Support
+    email: support@example.com
+
+servers:
+  - url: https://api.example.com/v1
+    description: Production server
+  - url: https://staging-api.example.com/v1
+    description: Staging server
+
+components:
+  schemas:
+    Match:
+      type: object
+      required:
+        - id
+        - homeTeam
+        - awayTeam
+        - matchTime
+        - homeOdds
+        - drawOdds
+        - awayOdds
+        - displayOrder
+        - visible
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the match
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        homeTeam:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Name of the home team
+          example: "Manchester United"
+        awayTeam:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Name of the away team
+          example: "Liverpool"
+        matchTime:
+          type: string
+          format: date-time
+          description: Scheduled start time of the match
+          example: "2024-03-15T15:00:00Z"
+        homeOdds:
+          type: number
+          format: float
+          minimum: 1.0
+          description: Betting odds for home team victory
+          example: 2.5
+        drawOdds:
+          type: number
+          format: float
+          minimum: 1.0
+          description: Betting odds for a draw
+          example: 3.2
+        awayOdds:
+          type: number
+          format: float
+          minimum: 1.0
+          description: Betting odds for away team victory
+          example: 2.8
+        homeForm:
+          type: string
+          nullable: true
+          description: Recent form of the home team
+          example: "WWDLW"
+        awayForm:
+          type: string
+          nullable: true
+          description: Recent form of the away team
+          example: "DLWWL"
+        headToHead:
+          type: string
+          nullable: true
+          description: Historical head-to-head results
+          example: "H:2 D:1 A:3"
+        displayOrder:
+          type: integer
+          minimum: 0
+          description: Order in which the match should be displayed
+          example: 1
+        visible:
+          type: boolean
+          description: Whether the match should be visible to users
+          example: true
+        updatedAt:
+          type: string
+          format: date-time
+          description: Timestamp of last update
+          example: "2024-03-14T12:30:00Z"
+
+    BetSlip:
+      type: object
+      required:
+        - id
+        - userId
+        - totalCost
+        - createdAt
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the bet slip
+        userId:
+          type: string
+          format: uuid
+          description: ID of the user who placed the bet
+        totalCost:
+          type: number
+          format: float
+          minimum: 0
+          description: Total cost of the bet
+        createdAt:
+          type: string
+          format: date-time
+          description: When the bet was placed
+        status:
+          type: string
+          enum: [pending, settled, cancelled]
+          description: Current status of the bet slip
+
+    BetSelection:
+      type: object
+      required:
+        - id
+        - betSlipId
+        - matchId
+        - selection
+        - oddsAtTime
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the selection
+        betSlipId:
+          type: string
+          format: uuid
+          description: ID of the associated bet slip
+        matchId:
+          type: string
+          format: uuid
+          description: ID of the selected match
+        selection:
+          type: string
+          enum: ["1", "X", "2"]
+          description: The selected outcome
+        oddsAtTime:
+          type: number
+          format: float
+          description: Odds at the time of selection
+
+    ApiConfig:
+      type: object
+      required:
+        - id
+        - apiUrl
+        - lastUpdated
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the config
+        apiUrl:
+          type: string
+          format: uri
+          description: URL of the external match data API
+        lastUpdated:
+          type: string
+          format: date-time
+          description: When the data was last synced
+
+    SyncStats:
+      type: object
+      required:
+        - added
+        - updated
+        - unchanged
+        - errors
+      properties:
+        added:
+          type: integer
+          minimum: 0
+          description: Number of new matches added
+        updated:
+          type: integer
+          minimum: 0
+          description: Number of matches updated
+        unchanged:
+          type: integer
+          minimum: 0
+          description: Number of matches unchanged
+        errors:
+          type: integer
+          minimum: 0
+          description: Number of errors encountered
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Error message
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error details
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+paths:
+  /matches:
+    get:
+      summary: List all matches
+      description: Retrieve a list of all matches with optional filtering and sorting
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: visible
+          in: query
+          schema:
+            type: boolean
+          description: Filter by visibility status
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [matchTime, displayOrder, homeTeam]
+          description: Field to sort by
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+          description: Sort order
+      responses:
+        '200':
+          description: List of matches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Match'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      summary: Create a new match
+      description: Add a new match to the system
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Match'
+      responses:
+        '201':
+          description: Match created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Match'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /matches/{matchId}:
+    parameters:
+      - name: matchId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: ID of the match
+    
+    get:
+      summary: Get match details
+      description: Retrieve details of a specific match
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Match details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Match'
+        '404':
+          description: Match not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    patch:
+      summary: Update match details
+      description: Update specific fields of a match
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                visible:
+                  type: boolean
+                displayOrder:
+                  type: integer
+                homeOdds:
+                  type: number
+                drawOdds:
+                  type: number
+                awayOdds:
+                  type: number
+      responses:
+        '200':
+          description: Match updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Match'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /config/api:
+    get:
+      summary: Get API configuration
+      description: Retrieve the current API configuration
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current API configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiConfig'
+
+    put:
+      summary: Update API configuration
+      description: Update the API URL and sync settings
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - apiUrl
+              properties:
+                apiUrl:
+                  type: string
+                  format: uri
+      responses:
+        '200':
+          description: Configuration updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiConfig'
+
+  /sync:
+    post:
+      summary: Synchronize match data
+      description: Fetch and sync match data from the configured external API
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Sync completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncStats'
+        '400':
+          description: Sync failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Matches
+    description: Match management endpoints
+  - name: Configuration
+    description: API configuration endpoints
+  - name: Synchronization
+    description: Data synchronization endpoints
